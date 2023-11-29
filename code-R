@@ -1,0 +1,90 @@
+setwd("C:/Users/apple/Desktop")
+
+library(plm)
+library(psych)
+library(lmtest)
+library(pastecs)
+library(PerformanceAnalytics)
+library(foreign)
+library(MASS)
+library(pscl)
+
+CropIns<-read.csv(file="CropsData.csv")
+
+summary(CropIns)
+stat.desc(CropIns)
+
+#stats for analysis
+#-------------------------------------------
+# START WITH SOME DATA VIEWS
+#-------------------------------------------
+#outliers -- Almost 2/3 of your dependent variable (IM) values are zeros. This will be a problem for normal regression. 
+#By using IM as your dependent variable, you have a count data model. Look this up so you can see the challenges involved. 
+
+boxplot(CropIns$IM, main="CropIns")
+
+#normality -- because of all of the zeros your data is quite skewed
+
+plot(density(CropIns$IM), main="CropIns Density", ylab="Frequency",col="green")
+
+#correlation -- what does this correlation tell you about the data? 
+subcropins=as.data.frame(cbind(Year=CropIns$Year,Area=CropIns$Area,RP=CropIns$RP,YP=CropIns$YP,Cov=CropIns$Cov,LR=CropIns$LR,price=CropIns$price,yieldlagged=CropIns$yieldlagged,pp=CropIns$pp,IM=CropIns$IM))
+chart.Correlation(subcropins, histogram=TRUE,method="pearson") 
+#####error： dataframe-subset-pair 包括YP,但不包括APH RI
+
+#assign dependent variable
+#Y<-CropIns$IM
+#summary(Y)
+
+#-------------------------------------------
+# REGRESSION ANALYSIS USING PLM
+# Time dimension = Year
+# Fixed Effects = Area
+#-------------------------------------------
+
+#Also consider a zero inflated negative binomial model.  
+
+#a zero inflated negative binomial model
+#zero are seperated
+zinb <-subcropins
+summary(zinb)
+#do not include APH RI
+#lag year 1 year/2 years
+m1 <- zeroinfl(IM~price+yieldlagged+pp+RP+YP+Cov+LR | Area, data = zinb, dist = "negbin")
+summary(m1)
+AIC(m1)
+#YP not significant so drop it
+
+m0 <- zeroinfl(IM~price+yieldlagged+pp+RP+Cov+LR | Area, data = zinb, dist = "negbin")
+summary(m0)
+#price moderately significant,close to 0.1
+#after pay indemnity,area is significant
+#log(theta) coefficient doesn't have real meaning, but p value--significant
+AIC(m0)
+#very close AIC,after dropping YP, we still catch information of YP
+
+#m100 <- zeroinfl(LR~pricelagged+yieldlagged+pp+RP+Cov | Area, data = zinb, dist = "negbin")
+#summary(m100)
+
+#pairs(zinb) 
+#####error-subset
+###no linearity, no multicollinearity
+
+
+qqnorm(m0$residuals)
+qqline(m0$residuals)
+###normally distribution 
+
+
+# poisson model
+#mp1 <- glm(IM~pricelagged+yieldlagged+RP+YP+Cov+LR,family=poisson,data=CropIns)
+#summary(mp1)
+
+# extra-poisson model
+#mp2 <- glm(IM~pricelagged+yieldlagged+RP+YP+Cov+LR,family=quasipoisson,data=CropIns)
+#summary(mp2)
+
+# negative binomial regression
+#mnb <- glm.nb(IM~pricelagged+yieldlagged+RP+YP+Cov+LR,data=CropIns)
+#summary(mnb)
+
